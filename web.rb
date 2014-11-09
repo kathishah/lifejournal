@@ -32,7 +32,18 @@ get '/' do
   json :msg => "Hello Sinatra"
 end
 
-#post '/users' do
-#  u = User.new(params[:user])
-#  if u.save
+get '/users' do
+  users = User.all(:order => [:email_address])
+  json :users => users
+end
+
+post '/users' do
+  u = User.new(params[:user])
+  if u.save
+    json :user => u
+  else
+    json :error => 'could not save'
+  end
+end
+
 
