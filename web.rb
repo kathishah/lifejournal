@@ -13,6 +13,19 @@ configure :production do
   set :logging, Logger::INFO
 end
 
+set(:method) do |m|
+  m = m.to_s.upcase
+  condition { request.request_method == m }
+end
+
+before :method => :post do
+  @data = JSON.parse(request.body.read)
+end
+
+before :method => :put do
+  @data = JSON.parse(request.body.read)
+end
+
 helpers do
   # Generates a random string of 10 characters using 1-9,A-Z,a-z
   # inspired by Paul Tyma
@@ -76,29 +89,50 @@ post '/users' do
   end
 end
 
+# update an existing entry
+put '/entries/:id' do |id|
+  content_type :json
+
+  #parse incoming json data
+  logger.debug "id = #{id}, data = #{@data}"
+
+  entry = Entry.get!(id)
+  unless entry
+    logger.error "Entry #{id} not found"
+    halt 404, "Entry #{id} not found"
+  end
+
+  logger.debug "Updating entry: #{entry.to_json}"
+  success = entry.update!(:body => @data['entry_body'])
+  if success
+    json :entry => entry
+  else
+    logger.error "Entry #{id} was not updated"
+    halt 500, "Entry #{id} was not updated"
+  end
+
+end
+
 # create an empty "entry"
 post '/entries' do
   content_type :json
 
   #parse incoming json data
-  request_body = request.body.read
-  logger.debug "body = #{request_body}"
-  data = JSON.parse(request_body)
-  logger.debug "data = #{data}"
+  logger.debug "data = #{@data}"
 
   #default for_date
-  data['for_date'] = Time.now.strftime("%Y-%m-%d") unless data['for_date']
-  logger.debug "email = #{data['email_address']}, for_date = #{data['for_date']}"
-  unless data['email_address']
+  @data['for_date'] = Time.now.strftime("%Y-%m-%d") unless @data['for_date']
+  logger.debug "email = #{@data['email_address']}, for_date = #{@data['for_date']}"
+  unless @data['email_address']
     logger.error 'No user email address found'
     halt 400, {:error => 'No user email address found'}.to_json
   end
 
   #get user_id from email
-  u = User.first(:email_address => data['email_address'])
+  u = User.first(:email_address => @data['email_address'])
   unless u
-    logger.error "User not found: #{data['email_address']}"
-    halt 404, {:error => "User not found: #{data['email_address']}"}.to_json
+    logger.error "User not found: #{@data['email_address']}"
+    halt 404, {:error => "User not found: #{@data['email_address']}"}.to_json
   else
     logger.debug "Found user: #{u.to_json}"
   end
@@ -110,7 +144,7 @@ post '/entries' do
   #create
   entry = Entry.create(
     :signature => sig,
-    :for_date => DateTime.strptime(data['for_date'], "%Y-%m-%d"),
+    :for_date => DateTime.strptime(@data['for_date'], "%Y-%m-%d"),
     :user => u,
     :created_at => DateTime.now
   )
@@ -120,3 +154,19 @@ post '/entries' do
   json :entry => entry
 end
 
+put '/entries/:id' do |id|
+  content_type :json
+
+  #parse incoming json data
+  request_body = request.body.read
+  logger.debug "body = #{request_body}"
+  data = JSON.parse(request_body)
+  logger.debug "data = #{data}"
+  entry = Entry.get!(id)
+
+end
+
+#TODO 1. Add auth for the user methods
+#TODO 2. Cron for triggering emails
+#TODO 3. Import all entries
+#TODO 4. Hookup mailgun incoming email with update
