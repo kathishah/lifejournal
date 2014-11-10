@@ -100,12 +100,9 @@ get '/user/:email_address/entries' do |email_address|
 end
 
 post '/users' do
-  u = User.new(params[:user])
-  if u.save
-    json :user => u
-  else
-    json :error => 'could not save'
-  end
+  content_type :json
+  u = User.create(:email_address => @data['email_address'])
+  json :user => u
 end
 
 # update an existing entry
@@ -129,7 +126,6 @@ put '/entries/:signature' do |sig|
     logger.error "Entry #{sig} was not updated"
     halt 500, "Entry #{sig} was not updated"
   end
-
 end
 
 # create an empty "entry"
