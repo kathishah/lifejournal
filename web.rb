@@ -27,6 +27,19 @@ before :method => :put do
 end
 
 helpers do
+=begin
+  def setup_mailgun_routes
+    # requires multimap, rest-client
+    data = Multimap.new
+    data[:priority] = 0
+    data[:description] = "Incoming post"
+    data[:expression]  = "match_recipient('(.*)@commentarios.net')"
+    data[:action]      = "forward('https://boiling-headland-6049.herokuapp.com/entries/\1')"
+    data[:action]      = "stop()"
+    RestClient.post "https://api:key-asfasdf@api.mailgun.net/v2/routes", data
+  end
+=end
+  
   # Generates a random string of 10 characters using 1-9,A-Z,a-z
   # inspired by Paul Tyma
   def generate_signature
@@ -80,6 +93,12 @@ get '/user/:email_address' do |email_address|
   json :user => u
 end
 
+get '/user/:email_address/entries' do |email_address|
+  u = User.first(:email_address => email_address)
+  entries = Entry.all(:user => u)
+  json :entries => entries
+end
+
 post '/users' do
   u = User.new(params[:user])
   if u.save
@@ -90,16 +109,16 @@ post '/users' do
 end
 
 # update an existing entry
-put '/entries/:id' do |id|
+put '/entries/:signature' do |sig|
   content_type :json
 
   #parse incoming json data
-  logger.debug "id = #{id}, data = #{@data}"
+  logger.debug "sig = #{sig}, data = #{@data}"
 
-  entry = Entry.get!(id)
+  entry = Entry.first(:signature => sig)
   unless entry
-    logger.error "Entry #{id} not found"
-    halt 404, "Entry #{id} not found"
+    logger.error "Entry #{sig} not found"
+    halt 404, "Entry #{sig} not found"
   end
 
   logger.debug "Updating entry: #{entry.to_json}"
@@ -107,8 +126,8 @@ put '/entries/:id' do |id|
   if success
     json :entry => entry
   else
-    logger.error "Entry #{id} was not updated"
-    halt 500, "Entry #{id} was not updated"
+    logger.error "Entry #{sig} was not updated"
+    halt 500, "Entry #{sig} was not updated"
   end
 
 end
@@ -154,17 +173,6 @@ post '/entries' do
   json :entry => entry
 end
 
-put '/entries/:id' do |id|
-  content_type :json
-
-  #parse incoming json data
-  request_body = request.body.read
-  logger.debug "body = #{request_body}"
-  data = JSON.parse(request_body)
-  logger.debug "data = #{data}"
-  entry = Entry.get!(id)
-
-end
 
 #TODO 1. Add auth for the user methods
 #TODO 2. Cron for triggering emails
