@@ -106,7 +106,7 @@ post '/users' do
 end
 
 # update an existing entry
-put '/entries/:signature' do |sig|
+post '/entries/:signature' do |sig|
   content_type :json
 
   #parse incoming json data
