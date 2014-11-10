@@ -119,7 +119,7 @@ post '/entries/:signature' do |sig|
   end
 
   logger.debug "Updating entry: #{entry.to_json}"
-  success = entry.update!(:body => @data['entry_body'])
+  success = entry.update!(:body => @data['entry_body'], :submitted_at => Time.now)
   if success
     json :entry => entry
   else
