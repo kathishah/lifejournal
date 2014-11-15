@@ -137,7 +137,7 @@ post '/incoming' do
   sender              = params['Sender']
   recipient           = params['Recipient']
   in_reply_to         = params['In-Reply-To'] || ''
-  sig = in_reply_to.sub("<(.*)@.*", "\1")
+  sig = in_reply_to.sub(/<(.*)@.*/, '\1')
   body_plain          = params['body-plain'] || ''
   body_without_quotes = params['stripped-text'] || ''
   submitted_at        = params['Date']
