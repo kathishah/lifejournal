@@ -18,14 +18,6 @@ set(:method) do |m|
   condition { request.request_method == m }
 end
 
-before :method => :post do
-  @data = JSON.parse(request.body.read)
-end
-
-before :method => :put do
-  @data = JSON.parse(request.body.read)
-end
-
 helpers do
 =begin
   def setup_mailgun_routes
@@ -54,6 +46,7 @@ helpers do
     }
     ret_val
   end
+
 end
 
 class User
@@ -73,44 +66,91 @@ class Entry
   belongs_to :user
 end
 
+class IncomingPost
+  include DataMapper::Resource
+  property :id, Serial
+  property :created_at, DateTime
+  property :fullpath, Text
+  property :referer, Text
+  property :raw_body, Text
+end
+
 class User
   has n, :entries
 end
 
 DataMapper.finalize.auto_upgrade!
 
+before do
+  content_type :json
+end
+
+before :method => :post do
+  @raw_body = request.body.read
+  #record the post
+  incoming_post = IncomingPost.create(:fullpath => request.fullpath, :referer => request.referer, :raw_body => @raw_body)
+  logger.debug "incoming_post = #{incoming_post.id}"
+  
+  @data = nil
+  begin
+    @data = JSON.parse(@raw_body)
+  rescue => e
+    # do nothing with the error
+  end
+end
+
+before :method => :put do
+  begin
+    @data = JSON.parse(request.body.read)
+  rescue => e
+    # do nothing with the error
+  end
+end
+
 get '/' do
   json :msg => "Hello from LifeJournal"
 end
 
 get '/users' do
-  users = User.all(:order => [:email_address])
-  json :users => users
+  User.all(:order => [:email_address])
 end
 
 get '/user/:email_address' do |email_address|
-  u = User.first(:email_address => email_address)
-  json :user => u
+  User.first(:email_address => email_address)
 end
 
 get '/user/:email_address/entries' do |email_address|
   u = User.first(:email_address => email_address)
-  entries = Entry.all(:user => u)
-  json :entries => entries
+  Entry.all(:user => u)
 end
 
 post '/users' do
-  content_type :json
-  u = User.create(:email_address => @data['email_address'])
-  json :user => u
+  User.create(:email_address => @data['email_address'])
 end
 
-# update an existing entry
+get '/entries' do
+  Entry.all(:order => [:user_id])
+end
+
+post '/incoming' do
+  logger.info "#{params.keys}"
+  sender              = params['sender']
+  recipient           = params['recipient']
+  subject             = params['subject'] || ''
+  body_plain          = params['body-plain'] || ''
+  body_without_quotes = params['stripped-text'] || ''
+end
+
+# save/update an existing entry
 post '/entries/:signature' do |sig|
-  content_type :json
 
   #parse incoming json data
   logger.debug "sig = #{sig}, data = #{@data}"
+
+  unless sig
+    logger.error "sig not found"
+    halt 404, "Missing parameter: signature"
+  end
 
   entry = Entry.first(:signature => sig)
   unless entry
@@ -121,7 +161,7 @@ post '/entries/:signature' do |sig|
   logger.debug "Updating entry: #{entry.to_json}"
   success = entry.update!(:body => @data['entry_body'], :submitted_at => Time.now)
   if success
-    json :entry => entry
+    entry
   else
     logger.error "Entry #{sig} was not updated"
     halt 500, "Entry #{sig} was not updated"
@@ -130,7 +170,6 @@ end
 
 # create an empty "entry"
 post '/entries' do
-  content_type :json
 
   #parse incoming json data
   logger.debug "data = #{@data}"
@@ -166,7 +205,7 @@ post '/entries' do
   logger.debug "Saved entry: #{entry.to_json}"
 
   #return
-  json :entry => entry
+  entry
 end
 
 
