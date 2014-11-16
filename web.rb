@@ -18,37 +18,7 @@ set(:method) do |m|
   condition { request.request_method == m }
 end
 
-helpers do
-=begin
-  def setup_mailgun_routes
-    # requires multimap, rest-client
-    data = Multimap.new
-    data[:priority] = 0
-    data[:description] = "Incoming post"
-    data[:expression]  = "match_recipient('(.*)@commentarios.net')"
-    data[:action]      = "forward('https://boiling-headland-6049.herokuapp.com/entries/\1')"
-    data[:action]      = "stop()"
-    RestClient.post "https://api:key-asfasdf@api.mailgun.net/v2/routes", data
-  end
-=end
-  
-  # Generates a random string of 10 characters using 1-9,A-Z,a-z
-  # inspired by Paul Tyma
-  def generate_signature
-    ranges = [[49,57], #ascii 1-9
-              [65,90], #ascii A-Z
-              [97,122]] #ascii a-z
-    ret_val = ''
-    10.times { |i|
-      j = Random.rand(3)
-      k = Random.rand( ranges[j][1] - ranges[j][0] )
-      ret_val += (k + ranges[j][0]).chr
-    }
-    ret_val
-  end
-
-end
-
+# Data model
 class User
   include DataMapper::Resource
   property :id, Serial
@@ -107,68 +77,113 @@ before :method => :put do
   end
 end
 
+helpers do
+=begin
+  def setup_mailgun_routes
+    # requires multimap, rest-client
+    data = Multimap.new
+    data[:priority] = 0
+    data[:description] = "Incoming post"
+    data[:expression]  = "match_recipient('(.*)@commentarios.net')"
+    data[:action]      = "forward('https://boiling-headland-6049.herokuapp.com/entries/\1')"
+    data[:action]      = "stop()"
+    RestClient.post "https://api:key-asfasdf@api.mailgun.net/v2/routes", data
+  end
+=end
+  
+  # Generates a random string of 10 characters using 1-9,A-Z,a-z
+  # inspired by Paul Tyma
+  def generate_signature
+    ranges = [[49,57], #ascii 1-9
+              [65,90], #ascii A-Z
+              [97,122]] #ascii a-z
+    ret_val = ''
+    10.times { |i|
+      j = Random.rand(3)
+      k = Random.rand( ranges[j][1] - ranges[j][0] )
+      ret_val += (k + ranges[j][0]).chr
+    }
+    ret_val
+  end
+
+  def save_entry(sig, entry_body, submitted_at = Time.now)
+    unless sig
+      logger.error "sig not found"
+      halt 404, "Missing parameter: signature"
+    end
+
+    entry = Entry.first(:signature => sig)
+    unless entry
+      logger.error "Entry #{sig} not found"
+      halt 404, "Entry #{sig} not found"
+    end
+
+    logger.debug "Updating entry: #{entry.to_json}"
+    success = entry.update!(:body => entry_body, :submitted_at => submitted_at)
+    if success
+      entry
+    else
+      nil
+    end
+  end
+end
+
 get '/' do
-  json :msg => "Hello from LifeJournal"
+  "Hello from LifeJournal"
 end
 
 get '/users' do
-  User.all(:order => [:email_address])
+  users = User.all(:order => [:email_address])
+  {:users => users}.to_json
 end
 
-get '/user/:email_address' do |email_address|
-  User.first(:email_address => email_address)
+get '/users/:email_address' do |email_address|
+  User.first(:email_address => email_address).to_json
 end
 
-get '/user/:email_address/entries' do |email_address|
+get '/users/:email_address/entries' do |email_address|
   u = User.first(:email_address => email_address)
-  Entry.all(:user => u)
+  Entry.all(:user => u).to_json
 end
 
 post '/users' do
-  User.create(:email_address => @data['email_address'])
+  User.create(:email_address => @data['email_address']).to_json
 end
 
 get '/entries' do
-  Entry.all(:order => [:user_id])
+  Entry.all(:order => [:user_id]).to_json
 end
 
 post '/incoming' do
   logger.info "#{params.keys}"
+
   sender              = params['Sender']
   recipient           = params['Recipient']
   in_reply_to         = params['In-Reply-To'] || ''
   sig = in_reply_to.sub(/<(.*)@.*/, '\1')
-  body_plain          = params['body-plain'] || ''
   body_without_quotes = params['stripped-text'] || ''
   submitted_at        = params['Date']
-  logger.info "in_reply_to = #{in_reply_to}, \nsig = #{sig}, \nuser_email = #{sender}, \ntext = #{body_without_quotes}, \nsubmitted_at = #{submitted_at}, \nbody_plain = #{body_plain}"
+
+  logger.info "in_reply_to = #{in_reply_to}, \nsig = #{sig}, \nuser_email = #{sender}, \ntext = #{body_without_quotes}, \nsubmitted_at = #{submitted_at}"
+
+  entry = save_entry(sig, body_without_quotes)
+  unless entry
+    logger.error "Entry #{sig} was not updated"
+    halt 500, "Entry #{sig} was not updated"
+  end
 end
 
 # save/update an existing entry
 post '/entries/:signature' do |sig|
-
   #parse incoming json data
   logger.debug "sig = #{sig}, data = #{@data}"
 
-  unless sig
-    logger.error "sig not found"
-    halt 404, "Missing parameter: signature"
-  end
-
-  entry = Entry.first(:signature => sig)
+  entry = save_entry(sig, @data['entry_body'])
   unless entry
-    logger.error "Entry #{sig} not found"
-    halt 404, "Entry #{sig} not found"
-  end
-
-  logger.debug "Updating entry: #{entry.to_json}"
-  success = entry.update!(:body => @data['entry_body'], :submitted_at => Time.now)
-  if success
-    entry
-  else
     logger.error "Entry #{sig} was not updated"
     halt 500, "Entry #{sig} was not updated"
   end
+  entry.to_json
 end
 
 # create an empty "entry"
