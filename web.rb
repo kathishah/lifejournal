@@ -3,7 +3,9 @@ require 'sinatra/json'
 require 'data_mapper'
 require 'json'
 require 'logger'
+require 'multimap'
 require 'pg'
+require 'rest-client'
 
 DataMapper.setup(:default, ENV['DATABASE_URL'] || 'postgres://localhost/mydb')
 configure :development do
@@ -126,12 +128,24 @@ helpers do
       nil
     end
   end
+
+  def send_email(from, to, subject, body)
+    RestClient.post "https://api:#{ENV['MAILGUN_API_KEY']}"\
+      "@api.mailgun.net/v2/commentarios.net/messages",
+      :from => "Commentarios.net <#{from}@commentarios.net>",
+      :to => to,
+      :subject => subject,
+      :text => body
+  end
 end
 
 get '/' do
   "Hello from LifeJournal"
 end
 
+# ===========
+# TODO: under auth (start)
+# ===========
 get '/users' do
   users = User.all(:order => [:email_address])
   {:users => users}.to_json
@@ -153,6 +167,10 @@ end
 get '/entries' do
   Entry.all(:order => [:user_id]).to_json
 end
+
+# ===========
+# under auth (end)
+# ===========
 
 post '/incoming' do
   logger.info "#{params.keys}"
@@ -186,7 +204,7 @@ post '/entries/:signature' do |sig|
   entry.to_json
 end
 
-# create an empty "entry"
+# create an empty "entry" and send email reminder
 post '/entries' do
 
   #parse incoming json data
@@ -222,12 +240,13 @@ post '/entries' do
   )
   logger.debug "Saved entry: #{entry.to_json}"
 
+  #send reminder email
+  send_email(entry.signature, u.email_address, "It's #{entry.for_date.strftime('%A, %b %-d')} - How did your day go?", "Just reply to this email with your entry")
+
   #return
-  entry
+  entry.to_json
 end
 
 
-#TODO 1. Add auth for the user methods
 #TODO 2. Cron for triggering emails
 #TODO 3. Import all entries
-#TODO 4. Hookup mailgun incoming email with update
