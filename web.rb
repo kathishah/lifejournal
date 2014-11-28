@@ -176,9 +176,8 @@ post '/incoming' do
   logger.info "#{params}"
 
   sender              = params['sender']
-  recipient           = params['Recipient']
-  in_reply_to         = params['In-Reply-To'] || ''
-  sig = in_reply_to.sub(/<(.*)@.*/, '\1')
+  recipient           = params['recipient']
+  sig = recipient.sub(/<(.*)@.*/, '\1')
   body_without_quotes = params['stripped-text'] || ''
   submitted_at        = params['Date']
 
