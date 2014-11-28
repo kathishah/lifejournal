@@ -181,7 +181,7 @@ post '/incoming' do
   body_without_quotes = params['stripped-text'] || ''
   submitted_at        = params['Date']
 
-  logger.info "in_reply_to = #{in_reply_to}, \nsig = #{sig}, \nuser_email = #{sender}, \ntext = #{body_without_quotes}, \nsubmitted_at = #{submitted_at}"
+  logger.info "sig = #{sig}, \nuser_email = #{sender}, \ntext = #{body_without_quotes}, \nsubmitted_at = #{submitted_at}"
 
   entry = save_entry(sig, body_without_quotes)
   unless entry
