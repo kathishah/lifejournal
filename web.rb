@@ -177,7 +177,7 @@ post '/incoming' do
 
   sender              = params['sender']
   recipient           = params['recipient']
-  sig = recipient.sub(/<(.*)@.*/, '\1')
+  sig = recipient.split('@')[0]
   body_without_quotes = params['stripped-text'] || ''
   submitted_at        = params['Date']
 
