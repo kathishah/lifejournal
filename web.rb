@@ -80,19 +80,29 @@ before :method => :put do
 end
 
 helpers do
-=begin
+  #not used but just for reference
   def setup_mailgun_routes
-    # requires multimap, rest-client
     data = Multimap.new
     data[:priority] = 0
     data[:description] = "Incoming post"
     data[:expression]  = "match_recipient('(.*)@commentarios.net')"
-    data[:action]      = "forward('https://boiling-headland-6049.herokuapp.com/entries/\1')"
+    #data[:action]      = "forward('https://boiling-headland-6049.herokuapp.com/entries/\1')"
+    data[:action]      = "forward('https://boiling-headland-6049.herokuapp.com/incoming')"
     data[:action]      = "stop()"
-    RestClient.post "https://api:key-asfasdf@api.mailgun.net/v2/routes", data
+    RestClient.post "https://api:#{ENV['MAILGUN_API_KEY']}@api.mailgun.net/v2/commentarios.net/routes", data
   end
-=end
   
+  def protected!
+    return if authorized?
+    headers['WWW-Authenticate'] = 'Basic realm="Restricted Area"'
+    halt 401, "Not authorized\n"
+  end
+
+  def authorized?
+    @auth ||=  Rack::Auth::Basic::Request.new(request.env)
+    @auth.provided? and @auth.basic? and @auth.credentials and @auth.credentials == [ENV['ADMIN_USERNAME'], ENV['ADMIN_PASSWORD']]
+  end
+
   # Generates a random string of 10 characters using 1-9,A-Z,a-z
   # inspired by Paul Tyma
   def generate_signature
@@ -144,33 +154,37 @@ get '/' do
 end
 
 # ===========
-# TODO: under auth (start)
+# User management
 # ===========
 get '/users' do
+  protected!
   users = User.all(:order => [:email_address])
   {:users => users}.to_json
 end
 
 get '/users/:email_address' do |email_address|
+  protected!
   User.first(:email_address => email_address).to_json
 end
 
 get '/users/:email_address/entries' do |email_address|
+  protected!
   u = User.first(:email_address => email_address)
   Entry.all(:user => u).to_json
 end
 
 post '/users' do
+  protected!
   User.create(:email_address => @data['email_address']).to_json
 end
 
+# ===========
+# Entry management
+# ===========
 get '/entries' do
+  protected!
   Entry.all(:order => [:user_id]).to_json
 end
-
-# ===========
-# under auth (end)
-# ===========
 
 post '/incoming' do
   logger.info "#{params}"
