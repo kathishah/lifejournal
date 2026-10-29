@@ -85,11 +85,11 @@ helpers do
     data = Multimap.new
     data[:priority] = 0
     data[:description] = "Incoming post"
-    data[:expression]  = "match_recipient('(.*)@commentarios.net')"
-    #data[:action]      = "forward('https://boiling-headland-6049.herokuapp.com/entries/\1')"
-    data[:action]      = "forward('https://boiling-headland-6049.herokuapp.com/incoming')"
+    data[:expression]  = "match_recipient('(.*)@example.com')"
+    #data[:action]      = "forward('https://app.example.com/entries/\1')"
+    data[:action]      = "forward('https://app.example.com/incoming')"
     data[:action]      = "stop()"
-    RestClient.post "https://api:#{ENV['MAILGUN_API_KEY']}@api.mailgun.net/v2/commentarios.net/routes", data
+    RestClient.post "https://api:#{ENV['MAILGUN_API_KEY']}@api.mailgun.net/v2/example.com/routes", data
   end
   
   def protected!
@@ -141,8 +141,8 @@ helpers do
 
   def send_email(from, to, subject, body)
     RestClient.post "https://api:#{ENV['MAILGUN_API_KEY']}"\
-      "@api.mailgun.net/v2/commentarios.net/messages",
-      :from => "Commentarios.net <#{from}@commentarios.net>",
+      "@api.mailgun.net/v2/example.com/messages",
+      :from => "Example Journal <#{from}@example.com>",
       :to => to,
       :subject => subject,
       :text => body
